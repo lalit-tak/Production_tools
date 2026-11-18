@@ -1,0 +1,70 @@
+
+
+# Occurance and Restore time will be in seconds
+# Note: Please do not change the order of events
+# Required setup.py install after every changes made in this file...
+
+event_ptime_configuration_list = [
+    #------------------------------------------------
+    #EVENT ID            , OCCUR PTIME, RESTORE PTIME
+    #------------------------------------------------
+    # ['OVER_VOLTAGE'   ,         300,         300],
+    # ['LOW_VOLTAGE'    ,         300,         300],
+    # ['MISSING_R_PHASE',         300,         300],
+    # ['MISSING_Y_PHASE',         300,         300],
+    # ['MISSING_B_PHASE',         300,         300],
+    # ['VOLTAGE_UNB'    ,         300,         300],
+    # ['REVERSE_R_PHASE',         300,         300],
+    # ['REVERSE_Y_PHASE',         300,         300],
+    # ['REVERSE_B_PHASE',         300,         300],
+    # ['CURRENT_UNB'    ,         300,         300],
+    # ['CURRENT_BYPASS' ,         300,         300],
+    # ['R_CTOPEN'       ,         300,         300],
+    # ['Y_CTOPEN'       ,         300,         300],
+    # ['B_CTOPEN'       ,         300,         300],
+    # ['OVER_CURRENT'   ,         300,         300],
+    # ['MAGNET'         ,          15,          15],
+    # ['NEUTAL_DIST'    ,         300,         300],
+    # ['LOW_PF'         ,         300,         300],
+    # ['OVERLOAD'       ,         300,         300],
+    #--------------------------------------------------
+    ['OVER_VOLTAGE'   ,         61,         20],
+    ['LOW_VOLTAGE'    ,         62,         21],
+    ['MISSING_R_PHASE',         63,         22],
+    ['MISSING_Y_PHASE',         64,         23],
+    ['MISSING_B_PHASE',         65,         24],
+    ['VOLTAGE_UNB'    ,         66,         25],
+    ['REVERSE_R_PHASE',         67,         26],
+    ['REVERSE_Y_PHASE',         68,         27],
+    ['REVERSE_B_PHASE',         69,         28],
+    ['CURRENT_UNB'    ,         61,         29],
+    ['CURRENT_BYPASS' ,         62,         20],
+    ['R_CTOPEN'       ,         63,         21],
+    ['Y_CTOPEN'       ,         64,         22],
+    ['B_CTOPEN'       ,         65,         23],
+    ['OVER_CURRENT'   ,         66,         24],
+    ['MAGNET'         ,          15,        15],
+    ['NEUTAL_DIST'    ,         67,         25],
+    ['LOW_PF'         ,         68,         26],
+    ['OVERLOAD'       ,         69,         27],
+    #--------------------------------------------------
+    # ['OVER_VOLTAGE'   ,         30,         30],
+    # ['LOW_VOLTAGE'    ,         30,         30],
+    # ['MISSING_R_PHASE',         30,         30],
+    # ['MISSING_Y_PHASE',         30,         30],
+    # ['MISSING_B_PHASE',         30,         30],
+    # ['VOLTAGE_UNB'    ,         30,         30],
+    # ['REVERSE_R_PHASE',         30,         30],
+    # ['REVERSE_Y_PHASE',         30,         30],
+    # ['REVERSE_B_PHASE',         30,         30],
+    # ['CURRENT_UNB'    ,         30,         30],
+    # ['CURRENT_BYPASS' ,         30,         30],
+    # ['R_CTOPEN'       ,         30,         30],
+    # ['Y_CTOPEN'       ,         30,         30],
+    # ['B_CTOPEN'       ,         30,         30],
+    # ['OVER_CURRENT'   ,         30,         30],
+    # ['MAGNET'         ,         15,         15],
+    # ['NEUTAL_DIST'    ,         30,         30],
+    # ['LOW_PF'         ,         30,         30],
+    # ['OVERLOAD'       ,         30,         30],
+]
