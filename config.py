@@ -10,8 +10,8 @@ import hashlib
 class Config:
     def __init__(self):
         self.ITERATIONS = 390000
-        self.PASSWORD = b"Polaris@1234"
-        self.CHECKSUMPASS = "PCT1P"
+        self.PASSWORD = b"PUT_ENC_PASSWORD"
+        self.CHECKSUMPASS = "PUT_CHECKSUM_PASSWORD"
 
     def decrypt_json(self, encrypted_json): 
         try:   
