@@ -422,6 +422,7 @@ def print_provisioning_summary(nic_params: dict):
     summary += "\n".join("{!r}: {!r}".format(k, v) for k, v in nic_params.items())
     summary += "\n" + "_" * 80 + "\n"
     logging.info(summary)
+    return summary
 
 
 def get_provisioning_status(nic_params: dict) -> bool:

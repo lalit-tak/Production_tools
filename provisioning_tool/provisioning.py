@@ -4,15 +4,16 @@
 #
 
 import argparse
+import functools
 import queue
 import logging
-import wirepas_provisioning
+from provisioning_tool import wirepas_provisioning
 import sys
-import dump.factory_mode as factory_mode
+from provisioning_tool import factory_mode
 from time import sleep
 import cbor2
 
-from wirepas_provisioning import WirepasProvisioning
+from provisioning_tool.wirepas_provisioning import WirepasProvisioning
 
 PROVISIONING_CLEAR_MAGIC = 0x45238176
 
@@ -22,38 +23,45 @@ class Communication:
     APPLY_RECEIVE_TIMEOUT_S = 2
     STOP_FACTORY_MODE_TIMEOUT_S = 2
 
-    fm = factory_mode.FactoryMode()
+    def __init__(self):
+        # NOTE: these used to be class attributes shared through a single
+        # module-level `nic_com = Communication()` singleton. That's why
+        # provisioning a single meter worked fine, but provisioning several
+        # meters at once (one thread per COM port) failed: every thread's
+        # serial_initialization() call shared the same fm/serial
+        # connection/rx thread, and responses from different meters landed
+        # in the same result queues. Instance attributes + a fresh
+        # Communication() per provisioning call give each concurrent call
+        # its own isolated state.
+        self.fm = factory_mode.FactoryMode()
 
-    provisioning_success_queue = queue.Queue()
-    read_parameters_queue = queue.Queue()
-    apply_success_queue = queue.Queue()
-    stop_factory_mode_queue = queue.Queue()
+        self.provisioning_success_queue = queue.Queue()
+        self.read_parameters_queue = queue.Queue()
+        self.apply_success_queue = queue.Queue()
+        self.stop_factory_mode_queue = queue.Queue()
 
 
-nic_com = Communication()
-
-
-def parse_message_received(type: factory_mode.MessageType, data: bytes):
+def parse_message_received(com: Communication, type: factory_mode.MessageType, data: bytes):
     if type == factory_mode.MessageType.PROVISIONING_WRITE_RESPONSE:
         if wirepas_provisioning.is_provisioning_dry_run_successful(data) is True:
             logging.debug("Dry Run Successful!")
-            nic_com.provisioning_success_queue.put(True)
+            com.provisioning_success_queue.put(True)
         else:
             logging.debug("Dry Run returned an error!")
-            nic_com.provisioning_success_queue.put(False)
+            com.provisioning_success_queue.put(False)
     elif type == factory_mode.MessageType.PROVISIONING_APPLY_RESPONSE:
         if wirepas_provisioning.is_provisioning_apply_successful(data) is True:
             logging.debug("Apply Successful!")
-            nic_com.apply_success_queue.put(True)
+            com.apply_success_queue.put(True)
         else:
             logging.debug("Apply returned an error!")
-            nic_com.apply_success_queue.put(False)
+            com.apply_success_queue.put(False)
     elif type == factory_mode.MessageType.PROVISIONING_READ_RESPONSE:
         logging.debug("Read Request Response Received")
-        nic_com.read_parameters_queue.put(data)
+        com.read_parameters_queue.put(data)
     elif type == factory_mode.MessageType.STOP_FACTORY_MODE_AND_RESET_RESPONSE:
         logging.debug("Stop Factory Mode and Reset Response Received")
-        nic_com.stop_factory_mode_queue.put(True)
+        com.stop_factory_mode_queue.put(True)
     else:
         logging.warning("Unknown type received: %s", type)
 
@@ -89,6 +97,7 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
             "Provisioning validation run return code not received in the given timeout!",
             factory_mode.ExitCodes.RECEPTION_TIMEOUT,
         )
+        return {}, False, "Provisioning validation run timeout"
 
     if validation_run_success is False:
         factory_mode.error_print_and_exit(
@@ -96,6 +105,7 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
             "Provisioning validation run was not successful!",
             factory_mode.ExitCodes.INVALID_PARAMETERS,
         )
+        return {}, False, "Provisioning validation run failed"
 
     logging.info("Applying parameters to the NIC")
 
@@ -112,6 +122,7 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
                 "Sending Device Reboot Request not successful!",
                 factory_mode.ExitCodes.SENDING_FAILED,
             )
+            return {}, False, "Sending reboot request failed"
     else:
         logging.info("Sending apply request (no reboot)")
         if (
@@ -125,6 +136,7 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
                 "Sending Provisioning Apply Request not successful!",
                 factory_mode.ExitCodes.SENDING_FAILED,
             )
+            return {}, False, "Sending apply request failed"
         
         # Wait for apply response
         try:
@@ -137,6 +149,7 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
                 "Provisioning apply response not received in the given timeout!",
                 factory_mode.ExitCodes.RECEPTION_TIMEOUT,
             )
+            return {}, False, "Provisioning apply timeout"
 
         if apply_success is False:
             factory_mode.error_print_and_exit(
@@ -144,12 +157,14 @@ def perform_parameters_provisioning(com: Communication, wp_prov: WirepasProvisio
                 "Provisioning apply was not successful!",
                 factory_mode.ExitCodes.INVALID_PARAMETERS,
             )
+            return {}, False, "Provisioning apply failed"
         
         logging.info("Parameters applied successfully without reboot")
 
 
 def perform_parameters_reading(com: Communication):
     logging.info("Sending request to read NIC Parameters")
+    summary = ""
     if (
         factory_mode.send_factory_mode_message(
             com.fm, bytes(), factory_mode.MessageType.PROVISIONING_READ_REQUEST
@@ -161,6 +176,7 @@ def perform_parameters_reading(com: Communication):
             "Sending Read Parameters Request not successful!",
             factory_mode.ExitCodes.SENDING_FAILED,
         )
+        return {}, False, "Sending read parameters request failed"
 
     try:
         nic_parameters_data = com.read_parameters_queue.get(
@@ -172,10 +188,10 @@ def perform_parameters_reading(com: Communication):
             "Read Parameters response was not received in the given timeout!",
             factory_mode.ExitCodes.RECEPTION_TIMEOUT,
         )
-
+        return {}, False, "Read parameters timeout"
     nic_parameters_data = wirepas_provisioning.decode_prov_dict(nic_parameters_data)
 
-    wirepas_provisioning.print_provisioning_summary(nic_parameters_data)
+    summary = wirepas_provisioning.print_provisioning_summary(nic_parameters_data)
 
     prov_sucess = wirepas_provisioning.get_provisioning_status(nic_parameters_data)
 
@@ -183,6 +199,7 @@ def perform_parameters_reading(com: Communication):
         factory_mode.success_print("NIC is successfully provisioned!")
     else:
         factory_mode.error_print("Missing parameters in the device!")
+    return nic_parameters_data, prov_sucess, summary
 
 
 def perform_parameters_clearing(com: Communication):
@@ -198,7 +215,7 @@ def perform_parameters_clearing(com: Communication):
             "Sending clear NIC Parameters Request not successful!",
             factory_mode.ExitCodes.SENDING_FAILED,
         )
-    
+        return {}, False, "Sending clear parameters request failed"
     factory_mode.success_print("NIC Parameters cleared successfully!")
 
 
@@ -245,15 +262,21 @@ def stop_factory_mode_and_reset(com: Communication, delay_s: int = 0):
         else:
             logging.info(f"Reponse received. Device stopped factory mode and will reset in {delay_s} seconds")
     
-    factory_mode.serial_cleanup(com.fm)
+    # factory_mode.serial_cleanup(com.fm)
 
 
-def provision_nic_parameters(args: argparse):
+def provision_nic_parameters(args: argparse, com_ser):
     # Managing the communication with the NIC
-    global nic_com
-    nic_com.fm.parse_message_callback = parse_message_received
+    # A fresh Communication() per call keeps this thread's serial
+    # connection/rx thread/result queues isolated from any other
+    # meter being provisioned concurrently on another thread.
+    nic_com = Communication()
+    nic_parameters_data = {}
+    prov_sucess = False
+    summary = ""
+    nic_com.fm.parse_message_callback = functools.partial(parse_message_received, nic_com)
 
-    factory_mode.serial_initialization(args.serial_port, nic_com.fm, args.baudrate)
+    factory_mode.serial_initialization(args.serial_port, nic_com.fm, args.baudrate, com_ser)
 
     logging.info("Starting NIC Provisioning")
 
@@ -323,7 +346,8 @@ def provision_nic_parameters(args: argparse):
         )
         logging.error("At least one parameter must be specified.")
         factory_mode.serial_cleanup(nic_com.fm)
-        sys.exit(factory_mode.ExitCodes.MISSING_PARAMETERS.value)
+        return {}, False, "No valid parameters provided"
+        # sys.exit(factory_mode.ExitCodes.MISSING_PARAMETERS.value)
 
     factory_mode.wait_for_challenge_response_with_reset_loop(nic_com.fm)
     perform_parameters_provisioning(nic_com, wp_prov, args.reboot_time)
@@ -342,18 +366,19 @@ def provision_nic_parameters(args: argparse):
         factory_mode.wait_for_challenge_response_with_reset_loop(nic_com.fm)
     
     # Read parameters after provisioning
-    perform_parameters_reading(nic_com)
+    nic_parameters_data, prov_sucess, summary = perform_parameters_reading(nic_com)
 
     # Stop factory mode and reset with specified delay
     stop_factory_mode_and_reset(nic_com, args.reboot_time)
+    return nic_parameters_data, prov_sucess, summary
 
-    sys.exit(factory_mode.ExitCodes.SUCCESS.value)
+    # sys.exit(factory_mode.ExitCodes.SUCCESS.value)
 
 
 def read_nic_parameters(args: argparse):
     # Managing the communication with the NIC
-    global nic_com
-    nic_com.fm.parse_message_callback = parse_message_received
+    nic_com = Communication()
+    nic_com.fm.parse_message_callback = functools.partial(parse_message_received, nic_com)
 
     factory_mode.serial_initialization(args.serial_port, nic_com.fm, args.baudrate)
 
@@ -368,8 +393,8 @@ def read_nic_parameters(args: argparse):
 
 def clear_nic_parameters(args: argparse):
     # Managing the communication with the NIC
-    global nic_com
-    nic_com.fm.parse_message_callback = parse_message_received
+    nic_com = Communication()
+    nic_com.fm.parse_message_callback = functools.partial(parse_message_received, nic_com)
 
     factory_mode.serial_initialization(args.serial_port, nic_com.fm, args.baudrate)
 
@@ -384,4 +409,4 @@ def clear_nic_parameters(args: argparse):
 
 if __name__ == "__main__":
     factory_mode.error_print("Unavailable. Please use 'provision_img_parameters.py' or 'read_img_parameters.py'")
-    exit(factory_mode.ExitCodes.CALL_TO_MAIN.value)
+    sys.exit(factory_mode.ExitCodes.CALL_TO_MAIN.value)

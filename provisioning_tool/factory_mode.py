@@ -28,6 +28,20 @@ from yahdlc import (
 )
 
 
+class ProvisioningAbort(Exception):
+    """Raised by error_print_and_exit() to actually stop a provisioning
+    attempt. Despite its name, error_print_and_exit() used to only log and
+    print -- it never raised or called sys.exit() -- so a failure partway
+    through (e.g. the device never responding to the provisioning
+    challenge) didn't stop anything: execution fell through into every
+    remaining stage (apply, read, stop-factory-mode...), each of which
+    then failed again against an already-closed serial port and printed
+    its own error, which is what looked like the error "not stopping"."""
+    def __init__(self, error_code: "ExitCodes"):
+        self.error_code = error_code
+        super().__init__(f"Provisioning aborted: {error_code.name}")
+
+
 class ExitCodes(Enum):
     SUCCESS = 0
     SENDING_FAILED = 1
@@ -79,24 +93,35 @@ class FactoryMode:
     TAP_RESET_RESPONSE_RECEIVE_TIMEOUT_S = 4.000
     EMBEDDED_HDLC_BUFFER_MAX_SIZE = 2048
 
-    ser = serial.Serial()
-    serial_baudrate = 9600
+    def __init__(self):
+        # NOTE: these used to be class attributes, which meant every
+        # FactoryMode() "instance" (there was only ever one shared/global
+        # instance) pointed at the exact same serial.Serial(), rx thread,
+        # lock and queues. That's fine for a single COM port, but when
+        # multiple ports are provisioned concurrently (one thread per
+        # meter) each thread's serial_initialization() call would tear down
+        # and reassign the *other* thread's serial connection and rx
+        # thread, and their responses would land in the same shared
+        # queues. Instance attributes give each FactoryMode() (one per
+        # concurrent provisioning call) its own independent state.
+        self.ser = serial.Serial()
+        self.serial_baudrate = 9600
 
-    parse_message_callback = None
+        self.parse_message_callback = None
 
-    hdlc_decode = Event()
-    tx_seq = 0
+        self.hdlc_decode = Event()
+        self.tx_seq = 0
 
-    # Add a stop event for the rx thread
-    rx_thread_stop = threading.Event()
-    rx_thread = None
+        # Add a stop event for the rx thread
+        self.rx_thread_stop = threading.Event()
+        self.rx_thread = None
 
-    tx_queue = queue.Queue(MAX_TX_ATTEMPT)
-    rx_challenge_queue = queue.Queue()
-    rx_ftype_queue = queue.Queue()
-    tap_reset_response_queue = queue.Queue()
+        self.tx_queue = queue.Queue(self.MAX_TX_ATTEMPT)
+        self.rx_challenge_queue = queue.Queue()
+        self.rx_ftype_queue = queue.Queue()
+        self.tap_reset_response_queue = queue.Queue()
 
-    serial_lock = threading.Lock()  # Add lock for thread-safe serial access
+        self.serial_lock = threading.Lock()  # Add lock for thread-safe serial access
 
 # Filter tap messages to not interfere with the other types of messages
 tap_filter = False
@@ -105,6 +130,7 @@ def error_print_and_exit(fm: FactoryMode, message: str, error_code: ExitCodes):
     serial_cleanup(fm)
     logging.error(Fore.RED + message + Fore.RESET)
     print(error_code.value)
+    raise ProvisioningAbort(error_code)
 
 
 def error_print(message):
@@ -349,11 +375,7 @@ def wait_for_challenge_response_with_reset_loop(fm: FactoryMode, timeout_s: floa
                 "Please check device connection and power.",
                 ExitCodes.RECEPTION_TIMEOUT,
             )
-            return False
-
-        if current_time - start_time > timeout_s:
-            error_print_and_exit("Timeout waiting for challenge response", ExitCodes.RECEPTION_TIMEOUT)
-            return False
+            return
 
         # Send soft reset sequence periodically
         if current_time - last_reset_time >= PROVISIONING_RESET_INTERVAL_S:
@@ -383,7 +405,7 @@ def wait_for_challenge_response_with_reset_loop(fm: FactoryMode, timeout_s: floa
                     f"Serial connection problem during soft reset: {str(e)}",
                     ExitCodes.SERIAL_ERROR,
                 )
-                return False
+                return
 
         # Send challenge periodically
         if current_time - last_challenge_time >= PROVISIONING_CHALLENGE_PERIOD_S:
@@ -398,7 +420,8 @@ def wait_for_challenge_response_with_reset_loop(fm: FactoryMode, timeout_s: floa
                     f"Serial connection problem during challenge: {str(e)}",
                     ExitCodes.SERIAL_ERROR,
                 )
-                return False
+                return
+
         sleep(0.005)
 
     with fm.rx_challenge_queue.mutex:
@@ -406,10 +429,9 @@ def wait_for_challenge_response_with_reset_loop(fm: FactoryMode, timeout_s: floa
 
     fm.hdlc_decode.set()
     logging.info("Received Provisioning Challenge Response!")
-    return True
 
 
-def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
+def serial_initialization(serial_port: str,fm: FactoryMode, baudrate: int, com_ser):
     """Initialize serial connection with proper cleanup of existing connection"""
     # Stop existing rx thread if running
     if fm.rx_thread is not None and fm.rx_thread.is_alive():
@@ -423,7 +445,6 @@ def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
                 "Failed to stop rx thread gracefully. Cannot safely reinitialize serial port.",
                 ExitCodes.SERIAL_ERROR,
             )
-            return False
 
     # Close existing serial connection if open
     with fm.serial_lock:
@@ -440,7 +461,7 @@ def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
         fm.rx_thread_stop.clear()
 
         try:
-            fm.ser = serial.Serial(serial_port, fm.serial_baudrate, timeout=1)
+            fm.ser = com_ser
             
             # Wait for serial port to be ready
             sleep(0.1)
@@ -457,8 +478,7 @@ def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
                     f"Error details: {str(e)}" +
                     Fore.RESET
                 )
-                print(ExitCodes.SERIAL_ERROR.value)
-                return False
+                sys.exit(ExitCodes.SERIAL_ERROR.value)
             elif "permission denied" in str(e).lower():
                 logging.error(
                     Fore.RED +
@@ -467,24 +487,21 @@ def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
                     f"Error details: {str(e)}" +
                     Fore.RESET
                 )
-                print(ExitCodes.SERIAL_ERROR.value)
-                return False
+                sys.exit(ExitCodes.SERIAL_ERROR.value)
             else:
                 logging.error(
                     Fore.RED +
                     f"Failed to open serial port '{serial_port}': {str(e)}" +
                     Fore.RESET
                 )
-                print(ExitCodes.SERIAL_ERROR.value)
-                return False
+                sys.exit(ExitCodes.SERIAL_ERROR.value)
         except Exception as e:
             logging.error(
                 Fore.RED +
                 f"Unexpected error opening serial port '{serial_port}': {str(e)}" +
                 Fore.RESET
             )
-            print(ExitCodes.SERIAL_ERROR.value)
-            return False
+            sys.exit(ExitCodes.SERIAL_ERROR.value)
 
     # Start rx thread AFTER serial port is confirmed open and ready
     fm.rx_thread = Thread(
@@ -496,30 +513,28 @@ def serial_initialization(serial_port: str, fm: FactoryMode, baudrate: int):
     
     # Give thread time to start
     sleep(0.05)
-    return True
 
 
 def serial_cleanup(fm: FactoryMode):
-    """Safely cleanup serial connection and rx thread"""
-    # Stop rx thread first
+    """Stop the rx thread this module started.
+
+    NOTE: this must NOT close fm.ser. serial_initialization() never opens
+    its own port -- it always does `fm.ser = com_ser`, taking over a
+    connection the caller (FTT's main_function) opened once up front and
+    keeps reusing for every remaining test step (tunnel mode close,
+    factory reset, ...). Closing it here on a provisioning failure used to
+    leave that shared connection dead for the rest of the test sequence,
+    so tunnel mode close/factory reset would then themselves fail with the
+    port already closed -- looking like they "didn't run" when they were
+    actually just failing against a port provisioning had pulled out from
+    under them.
+    """
     if fm.rx_thread and fm.rx_thread.is_alive():
         fm.rx_thread_stop.set()
         fm.rx_thread.join(timeout=PROVISIONING_STOP_RX_WAIT_S)
-        
-        # Verify thread stopped
+
         if fm.rx_thread.is_alive():
-            logging.error("rx thread did not stop - forcing serial close anyway")
-            # Thread is stuck, but we need to close the port
-            # The thread will crash when it tries to access the closed port
-    
-    # Now safe to close serial port
-    with fm.serial_lock:
-        if hasattr(fm.ser, "is_open") and fm.ser.is_open:
-            try:
-                fm.ser.close()
-                logging.debug("Serial port closed successfully")
-            except Exception as e:
-                logging.error(f"Error closing serial port: {e}")
+            logging.error("rx thread did not stop within timeout")
 
 
 def switch_baudrate_if_needed(fm: FactoryMode, serial_port: str, new_baudrate: int):

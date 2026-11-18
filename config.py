@@ -10,8 +10,8 @@ import hashlib
 class Config:
     def __init__(self):
         self.ITERATIONS = 390000
-        self.PASSWORD = b"PUT_ENC_PASSWORD"
-        self.CHECKSUMPASS = "PUT_CHECKSUM_PASSWORD"
+        self.PASSWORD = b"PUT_YOUR_PASSWORD_HERE"  # Replace with your actual password
+        self.CHECKSUMPASS = "PUT_YOUR_CHECKSUM_PASSWORD_HERE"  # Replace with your actual checksum password
 
     def decrypt_json(self, encrypted_json): 
         try:   
@@ -70,7 +70,9 @@ class Config:
     def check_encrypted_json(self, filename):
         try:
             config_dict = {}
+            print("Decrypting and validating the encrypted config file...", filename)
             config_dict = self.decrypt_json(filename)
+            # print(config_dict)
             if isinstance(config_dict, dict):
                 if "encrypted_data" in config_dict and "checksum" in config_dict:
                     encrypted_data = config_dict["encrypted_data"]
@@ -80,11 +82,11 @@ class Config:
                         if len(data)>0:
                             new_checksum = self.generate_checksum(data)
                             if old_checksum == new_checksum:
-                                # if "calib" in data.get("TOOL_TYPE", "").lower():
-                                return data, True
-                                # else:
-                                #     print("Wrong Encrypted Serial Config file Selected")
-                                #     return {}, False
+                                if "ftt" in data.get("TOOL_TYPE").lower():
+                                    return data, True
+                                else:
+                                    print("Wrong Encrypted Serial Config file Selected")
+                                    return {}, False
                             else:
                                 return {}, False
                         else:
