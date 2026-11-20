@@ -1123,7 +1123,7 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
 
         version_text = (
-            f"Tool Version: 1.5"
+            f"Tool Version: 1.6"
         )
         self.version_info_label = QLabel(version_text)
         self.version_info_label.setStyleSheet("color: white; font-size: 12px; font-weight: 600;")
