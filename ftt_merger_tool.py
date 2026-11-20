@@ -46,11 +46,11 @@ from colorama import Fore, Style, init
 # setup_logger()
 init(autoreset=True)
 
+
 ACCESS_KEY = "PUT_YOUR_ACCESS_KEY_HERE"
 SECRET_KEY = "PUT_YOUR_SECRET_KEY_HERE"
 bucket_name = "PUT_YOUR_BUCKET_NAME_HERE"
 folder_name = "PUT_YOUR_FOLDER_NAME_HERE"
-
 
 # ============================================================================
 # DICTIONARY-BASED RESULT STORAGE
@@ -210,7 +210,7 @@ def is_manufacturing_name_enabled(data_dict):
     ('MANUFACTURING_NAME_SET': 1 = run, 0 = skip). Accepts 1/0, "1"/"0"
     and "True"/"False"; defaults to enabled when the key is absent so
     existing config files keep their current behaviour."""
-    value = data_dict.get('MANUFACTURING_NAME_SET', 1)
+    value = str(data_dict.get('MANUFACTURING_NAME_SET', 1))
     if isinstance(value, str):
         value = value.strip().lower()
         return value not in ('0', 'false', 'no', 'off', '')
@@ -698,7 +698,7 @@ def rf_run_provisioning_worker(queue, ser_initilizer, provisioning_param):
 # to its `timeout_seconds`), which then failed inside Thread.join() trying
 # to compare that dict against 0 ("'>' not supported between instances of
 # 'int' and 'dict'"). Renamed so the two can no longer collide.
-def rf_run_provisioning_with_timeout(ser_initilizer, provisioning_param, timeout_seconds=5):
+def rf_run_provisioning_with_timeout(ser_initilizer, provisioning_param, timeout_seconds=60):
     queue = Queue()
     print(type(ser_initilizer))
     print(ser_initilizer)
@@ -1650,7 +1650,14 @@ def main_function(data_dict, com_port, meter_serial_num, input_pcb_no, input_nic
                 else:
                     test_result['Set Provisioning Channel'] = '1'
                     test_result['Set Provisioning Channel Status'] = 'fail'
-                    if str(channle_num) == '1':
+                    if channle_num is None:
+                        # Provisioning timed out or failed before any channel
+                        # data was read -- skip the channel check entirely so
+                        # the operator sees one failure reason, not two.
+                        test_result['Get Provisioning Channel'] = None
+                        test_result['Check Provisioning Parameters Status'] = 'fail'
+                        logging.warning(f"COM: {com_port}, Skipping channel check -- provisioning did not complete")
+                    elif str(channle_num) == '1':
                         test_result['Get Provisioning Channel'] = channle_num
                         test_result['Check Provisioning Parameters Status'] = 'pass'
                     else:
@@ -1983,7 +1990,7 @@ def main_function(data_dict, com_port, meter_serial_num, input_pcb_no, input_nic
 
 
         print (test_result)
-        if 'fail' in test_result.values():
+        if any(str(v).lower() == 'fail' for v in test_result.values()):
             meter_info['OVER_ALL_RESULT'] = 'fail'
         else:
             meter_info['OVER_ALL_RESULT'] = 'pass'
@@ -2621,7 +2628,10 @@ def run(data_dict, list_port, cpu_serial_num):
     if temp_results:
         # Flatten and remove duplicates
         for result in temp_results.values():
-            flat_results = [item for sublist in result for item in sublist]
+            if isinstance(result, list):
+                flat_results = [item for sublist in result for item in (sublist if isinstance(sublist, list) else [sublist])]
+            else:
+                flat_results = [result] if result else []
             unique_results = list(set(flat_results))
             msg_text = "\n".join(unique_results)
 
@@ -2664,11 +2674,8 @@ def run(data_dict, list_port, cpu_serial_num):
                 if (len(temp_result_dict)) > 0:       # if the result file is empty then don't upload to server
 
 
-
                     import boto3
                     from botocore.exceptions import NoCredentialsError
-                    
-
 
                     def upload_to_aws(local_folder, bucket, s3_file,sub_folder, file_time,folder_name1, cpu_serial_num):
                         s3 = boto3.client('s3', aws_access_key_id=ACCESS_KEY,
@@ -2769,9 +2776,9 @@ def run(data_dict, list_port, cpu_serial_num):
         try:
             if (len(temp_result_dict)) > 0:       # if the result file is empty then don't upload to server
 
+
                 import boto3
                 from botocore.exceptions import NoCredentialsError
-
 
 
                 def upload_to_aws(local_folder, bucket, s3_file,sub_folder, file_time,folder_name1, cpu_serial_num):
