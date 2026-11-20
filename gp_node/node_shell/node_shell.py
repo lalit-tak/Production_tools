@@ -270,6 +270,32 @@ class NodeShell(cmd.Cmd):
         self.print_command(self.network_api.get_credits,
                            kwargs={})
 
+    # periodic push ip
+    def do_get_periodic_push_ipv6_address(self, line):
+        self.print_command(self.network_api.get_periodic_push_ipv6_address,
+                            kwargs={})
+ 
+    def do_set_periodic_push_ipv6_address(self, line):
+        self.print_command(self.network_api.set_periodic_push_ipv6_address,
+                           kwargs={"line": line})
+
+    def do_set_periodic_push_interval(self, line):
+        self.print_command(self.network_api.set_periodic_push_interval,
+                           kwargs={"line": line})
+
+    def do_get_periodic_push_interval(self, line):
+        self.print_command(self.network_api.get_periodic_push_interval,
+                           kwargs={})
+
+    # event push ip
+    def do_get_event_push_ipv6_address(self, line):
+        self.print_command(self.network_api.get_event_push_ipv6_address,
+                            kwargs={})
+ 
+    def do_set_event_push_ipv6_address(self, line):
+        self.print_command(self.network_api.set_event_push_ipv6_address,
+                           kwargs={"line": line})
+
     def do_get_power_limit(self, line):
         self.print_command(self.network_api.get_power_limit,
                            kwargs={})
@@ -963,6 +989,15 @@ class NodeShell(cmd.Cmd):
     def do_get_payment_mode(self, line):
         self.print_command(self.network_api.get_payment_mode,
                            kwargs={})
+
+    # Set meter name
+    def do_set_manufacturing_name(self, line):
+        self.print_command(self.network_api.set_manufacturing_name,
+                            {"line": line})
+    # Get Meter name
+    def do_get_manufacturing_name(self, line):
+        self.print_command(self.network_api.get_manufacturing_name,
+                            kwargs={})
 
     def do_set_last_token_recharge_amount(self, line):
         self.print_command(self.network_api.set_last_token_recharge_amount,
@@ -1765,6 +1800,10 @@ class NodeShell(cmd.Cmd):
         self.print_command(self.network_api.set_dcu_mqtt_topics,
                            kwargs={"data": data})
 
+    def do_get_second_bootloader_logs(self, line):
+        self.print_command(self.network_api.get_second_bootloader_logs,
+                            kwargs={"line": line})
+    
     def do_get_bootloader_logs(self, line):
         self.print_command(self.network_api.get_bootloader_logs,
                             kwargs={})
@@ -4104,6 +4143,38 @@ class NodeShell(cmd.Cmd):
         self.print_command(self.network_api.disable_auto_reg_push,
                            kwargs={})
 
+    
+    def do_set_ftp_username(self, line):
+        self.print_command(self.network_api.set_ftp_username,
+                        kwargs={"line":line})
+    def do_set_ftp_password(self, line):
+        self.print_command(self.network_api.set_ftp_password,
+                        kwargs={"line":line})
+    def do_set_ftp_filename(self, line):
+        self.print_command(self.network_api.set_ftp_filename,
+                        kwargs={"line":line})
+    def do_set_ftp_hostname(self, line):
+        self.print_command(self.network_api.set_ftp_hostname,
+                        kwargs={"line":line})
+    def do_get_ftp_username(self, line):
+        self.print_command(self.network_api.get_ftp_username,
+                        kwargs={})
+    def do_get_ftp_password(self, line):
+        self.print_command(self.network_api.get_ftp_password,
+                        kwargs={})
+    def do_get_ftp_filename(self, line):
+        self.print_command(self.network_api.get_ftp_filename,
+                        kwargs={})
+    def do_get_ftp_hostname(self, line):
+        self.print_command(self.network_api.get_ftp_hostname,
+                        kwargs={})
+    def do_initiate_module_FOTA(self, line):
+        self.print_command(self.network_api.initiate_module_FOTA,
+                        kwargs={"line":line})
+    def do_get_module_version(self, line):
+        self.print_command(self.network_api.get_module_version,
+                        kwargs={})
+        
 def run():
     parser = OptionParser()
     parser.add_option("-d", "--device", dest="device",

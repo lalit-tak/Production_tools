@@ -573,5 +573,24 @@ class commandMappingContainer:
     DCU_RESET_GPRS                    =  60007 
     START_MCT                         =  54013
     SET_ALL_PREPAID_DATA              =  54012
+    GET_PERIODIC_PUSH_SETUP_ADDR      =  54044
+    SET_PERIODIC_ACTV_TIME            =  54043
+    GET_PERIODIC_ACTV_TIME            =  54042
+    SET_PERIODIC_PUSH_SETUP_ADDR      =  54045
+    GET_EVENT_PUSH_SETUP_ADDR         =  54046
+    SET_EVENT_PUSH_SETUP_ADDR         =  54047
+    SET_MANUFACTURER_NAME             =  54064
+    GET_MANUFACTURER_NAME             =  54065
 
-    
+    SET_FTP_USER_NAME                 =  54100
+    SET_FTP_PASSWORD                  =  54101
+    SET_FTP_FILE_NAME                 =  54102
+    SET_FTP_HOST_NAME                 =  54103
+    GET_FTP_USER_NAME                 =  54104
+    GET_FTP_PASSWORD                  =  54105
+    GET_FTP_FILE_NAME                 =  54106
+    GET_FTP_HOST_NAME                 =  54107
+
+    INITIATE_MODULE_FOTA              =  61073
+    GET_MODULE_VERSION                =  61077
+ 
