@@ -176,8 +176,10 @@ def get_calib_phase_field_templates():
     phase, so headers and data can't drift the way two independently
     hand-maintained lists (MeterInfo / CALIB_Fail_list) could in the
     original script."""
-    meter_info_keys = ['Date_time', 'Meter_IP_Address', 'Meter_PCB_Serial_No', 'Relay_Mode']
-    result_keys = ['Get_Meter_Address', 'Set_Relay_Mode', 'Get_Meter_PCB_No', 'PCT_Check','Calibration_Unlock', 'Phase_calibration']
+    # meter_info_keys = ['Date_time', 'Meter_IP_Address', 'Meter_PCB_Serial_No', 'Relay_Mode']
+    meter_info_keys = ['Date_time', 'Meter_IP_Address', 'Meter_PCB_Serial_No']
+    # result_keys = ['Get_Meter_Address', 'Set_Relay_Mode', 'Get_Meter_PCB_No', 'PCT_Check','Calibration_Unlock', 'Phase_calibration']
+    result_keys = ['Get_Meter_Address', 'Get_Meter_PCB_No', 'PCT_Check','Calibration_Unlock', 'Phase_calibration']
     fail_messages = {
         'Get_Meter_Address': 'Fail in Get meter address',
         'Set_Relay_Mode': 'Fail in Set Relay Mode',
@@ -631,27 +633,27 @@ def worker_function_phase(data_dict, com_port, portID, result_queue, abort_flag,
                     logging.error(f"Error in calibration in performing calibration unlock: {e}, for COM: {com_port}")
                     retryCnt -= 1
 
-            # Set Relay Mode (On/Off, Event Log)
-            retryCnt = 3
-            while (retryCnt):
-                logging.debug(f"Set Relay Mode for com: {com_port}, attempt: {4-retryCnt}")
-                try:
-                    relay_mode = cases.Set_Meter_RelayMode(0, com_port)
-                    if relay_mode.get("status").lower() =='fail':
-                        meter_info['Relay_Mode'] = ''
-                        test_result['Set_Relay_Mode'] = 'fail'
-                    else:
-                        meter_info['Relay_Mode'] = '0'
-                        test_result['Set_Relay_Mode'] = 'pass'
-                    logging.debug(f"Set Relay Mode for com: {com_port}, response: {relay_mode}")
-                    # retryCnt = 0
-                    break
-                except Exception as e:
-                    logging.error(f"Error in Set Relay Mode for com: {com_port}, error: {str(e)}")
-                    retryCnt = retryCnt-1
-                    if retryCnt == 0:
-                        meter_info['Relay_Mode'] = ''
-                        test_result['Set_Relay_Mode'] = 'fail'
+            # # Set Relay Mode (On/Off, Event Log)
+            # retryCnt = 3
+            # while (retryCnt):
+            #     logging.debug(f"Set Relay Mode for com: {com_port}, attempt: {4-retryCnt}")
+            #     try:
+            #         relay_mode = cases.Set_Meter_RelayMode(0, com_port)
+            #         if relay_mode.get("status").lower() =='fail':
+            #             meter_info['Relay_Mode'] = ''
+            #             test_result['Set_Relay_Mode'] = 'fail'
+            #         else:
+            #             meter_info['Relay_Mode'] = '0'
+            #             test_result['Set_Relay_Mode'] = 'pass'
+            #         logging.debug(f"Set Relay Mode for com: {com_port}, response: {relay_mode}")
+            #         # retryCnt = 0
+            #         break
+            #     except Exception as e:
+            #         logging.error(f"Error in Set Relay Mode for com: {com_port}, error: {str(e)}")
+            #         retryCnt = retryCnt-1
+            #         if retryCnt == 0:
+            #             meter_info['Relay_Mode'] = ''
+            #             test_result['Set_Relay_Mode'] = 'fail'
 
             # Start Phase Calibration
             retryCnt = 3
